@@ -1,0 +1,49 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 10
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 20
+      name: "Peak load"
+  processor: "./load-test-processor.js"
+
+scenarios:
+  - name: "Browse Events"
+    weight: 40
+    flow:
+      - get:
+          url: "/api/events"
+          capture:
+            - json: "$.events[0]._id"
+              as: "eventId"
+      - think: 2
+      - get:
+          url: "/api/events/{{ eventId }}"
+      - think: 3
+
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/health"
+
+  - name: "Search Events"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/events?search=concert&category=concert&page=1&limit=10"
+      - think: 2
+
+  - name: "Get Event Categories"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/events?category=workshop"
+      - think: 1
+      - get:
+          url: "/api/events?category=conference"

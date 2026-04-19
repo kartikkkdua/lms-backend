@@ -1,0 +1,69 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 30
+      arrivalRate: 2
+      name: "Booking stress test"
+  processor: "./load-test-processor.js"
+
+scenarios:
+  - name: "Complete Booking Flow"
+    flow:
+      # Get CAPTCHA
+      - get:
+          url: "/api/auth/captcha"
+          capture:
+            - json: "$.id"
+              as: "captchaId"
+            - json: "$.answer"
+              as: "captchaAnswer"
+      
+      # Login
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "kartik.dua@icloud.com"
+            password: "Kartik@123"
+            captchaId: "{{ captchaId }}"
+            captchaAnswer: "{{ captchaAnswer }}"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - think: 1
+      
+      # Browse events
+      - get:
+          url: "/api/events?status=published"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          capture:
+            - json: "$.events[0]._id"
+              as: "eventId"
+      
+      - think: 2
+      
+      # Get event details
+      - get:
+          url: "/api/events/{{ eventId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      
+      - think: 1
+      
+      # Check seat availability
+      - get:
+          url: "/api/seats/events/{{ eventId }}"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+      
+      - think: 2
+      
+      # Note: Actual booking would require payment processing
+      # This just tests the read-heavy parts of the booking flow
+      
+      # Get my bookings
+      - get:
+          url: "/api/bookings/my"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
