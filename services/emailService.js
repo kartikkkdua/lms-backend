@@ -1,18 +1,15 @@
 const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
 
-// Create transporter
+// Create transporter using Resend SMTP
 const createTransporter = () => {
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false, // TLS on port 587
+    host: 'smtp.resend.com',
+    port: 465,
+    secure: true,
     auth: {
-      user: process.env.SMTP_USER || process.env.EMAIL_USER,
-      pass: process.env.SMTP_PASS || process.env.EMAIL_PASS
-    },
-    tls: {
-      rejectUnauthorized: false
+      user: 'resend',
+      pass: process.env.RESEND_API_KEY
     }
   });
 };
@@ -815,7 +812,7 @@ const sendEmail = async (to, template, data) => {
     logger.info(`Sending ${template} email to: ${to}`);
 
     const mailOptions = {
-      from: `"Event Management" <${process.env.EMAIL_USER}>`,
+      from: `EventHub <onboarding@resend.dev>`,
       to,
       subject: emailContent.subject,
       html: emailContent.html
@@ -850,7 +847,7 @@ const sendEmailWithAttachment = async (to, template, data, attachments = []) => 
     logger.info(`Sending ${template} email with ${attachments.length} attachment(s) to: ${to}`);
 
     const mailOptions = {
-      from: `"Event Management" <${process.env.EMAIL_USER}>`,
+      from: `EventHub <onboarding@resend.dev>`,
       to,
       subject: emailContent.subject,
       html: emailContent.html,
