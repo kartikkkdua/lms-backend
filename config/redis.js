@@ -4,17 +4,16 @@ const logger = require('../utils/logger');
 let redis = null;
 let Redis = null;
 
-if (process.env.REDIS_OPTIONAL !== 'true') {
-  // Redis is required, load and create client
+if (process.env.REDIS_URL) {
   try {
     Redis = require('redis');
     const redisConfig = {
-      url: process.env.REDIS_URL || 'redis://localhost:6379',
+      url: process.env.REDIS_URL,
       socket: {
         reconnectStrategy: (retries) => {
           if (retries > 3) {
-            logger.error('Redis: Max reconnection attempts reached');
-            return false;
+            logger.warn('Redis: Max reconnection attempts reached, disabling Redis');
+            return false; // stop retrying, but don't crash
           }
           const delay = Math.min(retries * 1000, 3000);
           logger.warn(`Redis: Reconnecting in ${delay}ms (attempt ${retries})`);
@@ -23,25 +22,20 @@ if (process.env.REDIS_OPTIONAL !== 'true') {
         connectTimeout: 5000,
       }
     };
-    
     redis = Redis.createClient(redisConfig);
   } catch (error) {
-    logger.error('Failed to load Redis module:', error.message);
+    logger.warn('Failed to load Redis module, continuing without Redis:', error.message);
   }
 } else {
-  // Redis is optional, don't load or create client
-  logger.info('Redis is optional, using in-memory storage');
+  logger.info('No REDIS_URL set, using in-memory storage');
 }
 
 // Event handlers (only if Redis client exists)
 if (redis) {
   redis.on('error', (err) => {
-    if (process.env.REDIS_OPTIONAL === 'true') {
-      // Suppress errors if Redis is optional
-      logger.debug('Redis error (optional):', err.code);
-    } else {
-      logger.error('Redis Client Error:', err);
-    }
+    // Never crash on Redis errors - just log and continue
+    logger.warn('Redis Client Error (non-fatal):', err.code || err.message);
+    redisAvailable = false;
   });
 
   redis.on('connect', () => {
@@ -65,38 +59,22 @@ let redisAvailable = false;
 
 // Connect to Redis
 const connectRedis = async () => {
-  // Skip if Redis client doesn't exist
   if (!redis) {
-    logger.info(' Redis disabled, using in-memory storage');
+    logger.info('Redis disabled, using in-memory storage');
     redisAvailable = false;
     return;
   }
 
-  // Skip Redis connection if optional
-  if (process.env.REDIS_OPTIONAL === 'true') {
-    try {
-      if (!redis.isOpen) {
-        await redis.connect();
-        logger.info(' Redis connection established');
-        redisAvailable = true;
-      }
-    } catch (error) {
-      logger.info('ℹ️ Redis not available, using in-memory fallback');
-      redisAvailable = false;
-      // Don't throw error, continue without Redis
+  try {
+    if (!redis.isOpen) {
+      await redis.connect();
+      logger.info('Redis connection established');
+      redisAvailable = true;
     }
-  } else {
-    // Redis is required
-    try {
-      if (!redis.isOpen) {
-        await redis.connect();
-        logger.info(' Redis connection established');
-        redisAvailable = true;
-      }
-    } catch (error) {
-      logger.error('Failed to connect to Redis:', error.message);
-      throw error;
-    }
+  } catch (error) {
+    logger.warn('Redis not available, continuing with in-memory fallback:', error.code || error.message);
+    redisAvailable = false;
+    // Never throw - server starts fine without Redis
   }
 };
 
@@ -180,7 +158,8 @@ const redisHelpers = {
 // Initialize connection only if Redis client exists
 if (redis) {
   connectRedis().catch(err => {
-    logger.error('Redis connection failed:', err);
+    logger.warn('Redis connection failed (non-fatal):', err.code || err.message);
+    redisAvailable = false;
   });
 }
 
