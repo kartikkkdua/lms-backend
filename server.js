@@ -331,6 +331,11 @@ const cleanupExpiredBookings = async () => {
 // Start server
 const startServer = async () => {
   try {
+    console.log('Starting server...');
+    console.log('NODE_ENV:', process.env.NODE_ENV);
+    console.log('MONGODB_URI set:', !!process.env.MONGODB_URI);
+    console.log('PORT:', process.env.PORT || 3000);
+
     await connectDB();
     logger.info(' Database connection established successfully');
     
@@ -346,6 +351,8 @@ const startServer = async () => {
       logger.info(` API Documentation: http://localhost:${PORT}/api-docs`);
     });
   } catch (error) {
+    console.error('STARTUP CRASH:', error.message);
+    console.error('Stack:', error.stack);
     logger.error(' Unable to start server:', error);
     process.exit(1);
   }
