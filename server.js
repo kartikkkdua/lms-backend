@@ -48,8 +48,20 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST']
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+      const isVercel = origin.endsWith('.vercel.app');
+      const isRender = origin.endsWith('.onrender.com');
+      const frontend = process.env.FRONTEND_URL;
+      if (isLocalhost || isVercel || isRender || origin === frontend) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
@@ -61,15 +73,24 @@ app.set('io', io);
 // Security middleware
 app.use(helmet());
 
-// CORS configuration with whitelist
+// CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
-    const whitelist = process.env.CORS_WHITELIST?.split(',') || [
-      'http://localhost:5173',
-      'http://localhost:3000'
-    ];
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin || whitelist.indexOf(origin) !== -1) {
+    // Allow requests with no origin (mobile apps, Postman, curl, etc.)
+    if (!origin) return callback(null, true);
+
+    const whitelist = process.env.CORS_WHITELIST
+      ? process.env.CORS_WHITELIST.split(',').map(o => o.trim())
+      : [];
+
+    // Always allow localhost in development
+    const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+    // Always allow vercel.app deployments
+    const isVercel = origin.endsWith('.vercel.app');
+    // Always allow render.com deployments
+    const isRender = origin.endsWith('.onrender.com');
+
+    if (isLocalhost || isVercel || isRender || whitelist.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
